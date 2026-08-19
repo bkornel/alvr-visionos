@@ -8,13 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		656A9FCF2F04031600D8DE2D /* ChaperoneSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 656A9FCE2F04031600D8DE2D /* ChaperoneSystem.swift */; };
-		93F10375671142039BA634E8 /* PerformanceTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FDF7F3AB0664D5089D91DE3 /* PerformanceTracker.swift */; };
-		E7AC9193873D48A2B7122E11 /* PerformanceOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BD00478C3614F7DB55D935E /* PerformanceOverlayView.swift */; };
 		8E1240FF2B7CC02E005B75F2 /* Entry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E1240FE2B7CC02E005B75F2 /* Entry.swift */; };
 		8E1241032B7CC0E1005B75F2 /* EntryControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E1241022B7CC0E1005B75F2 /* EntryControls.swift */; };
 		8E458AB32B7E05FB0019FC73 /* EventHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E458AB22B7E05FB0019FC73 /* EventHandler.swift */; };
 		8E458AB52B7E2C010019FC73 /* WorldTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E458AB42B7E2C010019FC73 /* WorldTracker.swift */; };
 		8E739C8B2B78990B0045ED16 /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E739C8A2B78990A0045ED16 /* ViewModel.swift */; };
+		93F10375671142039BA634E8 /* PerformanceTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FDF7F3AB0664D5089D91DE3 /* PerformanceTracker.swift */; };
 		9ED257172B8062A2008DC22F /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ED257162B8062A1008DC22F /* Settings.swift */; };
 		C5E590322B6379ED00328ED6 /* ALVRClientApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5E590312B6379ED00328ED6 /* ALVRClientApp.swift */; };
 		C5E590362B6379ED00328ED6 /* Renderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5E590352B6379ED00328ED6 /* Renderer.swift */; };
@@ -26,15 +25,6 @@
 		E702FBDC2B899B8700EE75D0 /* GlobalSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E702FBDB2B899B8300EE75D0 /* GlobalSettings.swift */; };
 		E70C9AEA2C9377F50035B4F9 /* Codable.swift in Sources */ = {isa = PBXBuildFile; fileRef = E70C9AE92C9377F20035B4F9 /* Codable.swift */; };
 		E71352CE2DF784C60079F12B /* GCController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71352CD2DF784BF0079F12B /* GCController.swift */; };
-		E7A11A0200000000000000A2 /* InputTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A0100000000000000A1 /* InputTypes.swift */; };
-		E7A11A0400000000000000A4 /* SteamControllerDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A0300000000000000A3 /* SteamControllerDevice.swift */; };
-		E7A11A0700000000000000A7 /* InteractionProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A0600000000000000A6 /* InteractionProfile.swift */; };
-		E7A11A0900000000000000A9 /* InputSink.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A0800000000000000A8 /* InputSink.swift */; };
-		E7A11A0B00000000000000AB /* InputDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A0A00000000000000AA /* InputDebugView.swift */; };
-		E7A11A0D00000000000000AD /* IbexModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A0C00000000000000AC /* IbexModel.swift */; };
-		E7A11A0F00000000000000AF /* ControllerPoseFuser.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A0E00000000000000AE /* ControllerPoseFuser.swift */; };
-		E7A11A1300000000000000B3 /* ComponentProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A1200000000000000B2 /* ComponentProbe.swift */; };
-		E7A11A1100000000000000B1 /* ibex_ev1.mesh in Resources */ = {isa = PBXBuildFile; fileRef = E7A11A1000000000000000B0 /* ibex_ev1.mesh */; };
 		E71DEF972C18D478008A2074 /* RealityKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71DEF932C18D325008A2074 /* RealityKit.swift */; };
 		E71DEF982C18D478008A2074 /* SwiftUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71DEF942C18D325008A2074 /* SwiftUI.swift */; };
 		E71DEF9A2C18D4B4008A2074 /* ALVRTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71DEF992C18D4B4008A2074 /* ALVRTypes.swift */; };
@@ -50,8 +40,18 @@
 		E77FDE582EC5D98200B0ED4F /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E77FDE572EC5D97F00B0ED4F /* CameraView.swift */; };
 		E78D482D2EBA7508000F77D7 /* AV1Parser.swift in Sources */ = {isa = PBXBuildFile; fileRef = E78D482C2EBA7504000F77D7 /* AV1Parser.swift */; };
 		E78D482F2EBA76BB000F77D7 /* NALParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = E78D482E2EBA76B8000F77D7 /* NALParser.swift */; };
+		E7A11A0200000000000000A2 /* InputTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A0100000000000000A1 /* InputTypes.swift */; };
+		E7A11A0400000000000000A4 /* SteamControllerDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A0300000000000000A3 /* SteamControllerDevice.swift */; };
+		E7A11A0700000000000000A7 /* InteractionProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A0600000000000000A6 /* InteractionProfile.swift */; };
+		E7A11A0900000000000000A9 /* InputSink.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A0800000000000000A8 /* InputSink.swift */; };
+		E7A11A0B00000000000000AB /* InputDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A0A00000000000000AA /* InputDebugView.swift */; };
+		E7A11A0D00000000000000AD /* IbexModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A0C00000000000000AC /* IbexModel.swift */; };
+		E7A11A0F00000000000000AF /* ControllerPoseFuser.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A0E00000000000000AE /* ControllerPoseFuser.swift */; };
+		E7A11A1100000000000000B1 /* ibex_ev1.mesh in Resources */ = {isa = PBXBuildFile; fileRef = E7A11A1000000000000000B0 /* ibex_ev1.mesh */; };
+		E7A11A1300000000000000B3 /* ComponentProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A11A1200000000000000B2 /* ComponentProbe.swift */; };
 		E7A98A9E2BE2EEAB003DF333 /* DummyMetalRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A98A9D2BE2EEA5003DF333 /* DummyMetalRenderer.swift */; };
 		E7A98AA02BE2EEEA003DF333 /* RealityKitClientSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A98A9F2BE2EEEA003DF333 /* RealityKitClientSystem.swift */; };
+		E7AC9193873D48A2B7122E11 /* PerformanceOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BD00478C3614F7DB55D935E /* PerformanceOverlayView.swift */; };
 		E7D606032C1B5D39009E3343 /* RealityKitEyeTrackingSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7D606022C1B5D37009E3343 /* RealityKitEyeTrackingSystem.swift */; };
 		E7D606052C1B646D009E3343 /* EyeTrackingMats.usda in Resources */ = {isa = PBXBuildFile; fileRef = E7D606042C1B646D009E3343 /* EyeTrackingMats.usda */; };
 		E7F222422BE2F03800D10191 /* RealityKitClientView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7F222412BE2F03800D10191 /* RealityKitClientView.swift */; };
@@ -94,9 +94,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		656A9FCE2F04031600D8DE2D /* ChaperoneSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChaperoneSystem.swift; sourceTree = "<group>"; };
 		0FDF7F3AB0664D5089D91DE3 /* PerformanceTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceTracker.swift; sourceTree = "<group>"; };
 		5BD00478C3614F7DB55D935E /* PerformanceOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceOverlayView.swift; sourceTree = "<group>"; };
+		656A9FCE2F04031600D8DE2D /* ChaperoneSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChaperoneSystem.swift; sourceTree = "<group>"; };
 		8E1240FE2B7CC02E005B75F2 /* Entry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Entry.swift; sourceTree = "<group>"; };
 		8E1241022B7CC0E1005B75F2 /* EntryControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryControls.swift; sourceTree = "<group>"; };
 		8E458AB22B7E05FB0019FC73 /* EventHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventHandler.swift; sourceTree = "<group>"; };
@@ -120,15 +120,6 @@
 		E702FBDB2B899B8300EE75D0 /* GlobalSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalSettings.swift; sourceTree = "<group>"; };
 		E70C9AE92C9377F20035B4F9 /* Codable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Codable.swift; sourceTree = "<group>"; };
 		E71352CD2DF784BF0079F12B /* GCController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GCController.swift; sourceTree = "<group>"; };
-		E7A11A0100000000000000A1 /* InputTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputTypes.swift; sourceTree = "<group>"; };
-		E7A11A0300000000000000A3 /* SteamControllerDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteamControllerDevice.swift; sourceTree = "<group>"; };
-		E7A11A0600000000000000A6 /* InteractionProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractionProfile.swift; sourceTree = "<group>"; };
-		E7A11A0800000000000000A8 /* InputSink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSink.swift; sourceTree = "<group>"; };
-		E7A11A0A00000000000000AA /* InputDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputDebugView.swift; sourceTree = "<group>"; };
-		E7A11A0C00000000000000AC /* IbexModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IbexModel.swift; sourceTree = "<group>"; };
-		E7A11A0E00000000000000AE /* ControllerPoseFuser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControllerPoseFuser.swift; sourceTree = "<group>"; };
-		E7A11A1200000000000000B2 /* ComponentProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComponentProbe.swift; sourceTree = "<group>"; };
-		E7A11A1000000000000000B0 /* ibex_ev1.mesh */ = {isa = PBXFileReference; lastKnownFileType = file; path = ibex_ev1.mesh; sourceTree = "<group>"; };
 		E71DEF932C18D325008A2074 /* RealityKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealityKit.swift; sourceTree = "<group>"; };
 		E71DEF942C18D325008A2074 /* SwiftUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftUI.swift; sourceTree = "<group>"; };
 		E71DEF992C18D4B4008A2074 /* ALVRTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ALVRTypes.swift; sourceTree = "<group>"; };
@@ -145,6 +136,15 @@
 		E77FDE572EC5D97F00B0ED4F /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
 		E78D482C2EBA7504000F77D7 /* AV1Parser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV1Parser.swift; sourceTree = "<group>"; };
 		E78D482E2EBA76B8000F77D7 /* NALParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NALParser.swift; sourceTree = "<group>"; };
+		E7A11A0100000000000000A1 /* InputTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputTypes.swift; sourceTree = "<group>"; };
+		E7A11A0300000000000000A3 /* SteamControllerDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteamControllerDevice.swift; sourceTree = "<group>"; };
+		E7A11A0600000000000000A6 /* InteractionProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractionProfile.swift; sourceTree = "<group>"; };
+		E7A11A0800000000000000A8 /* InputSink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSink.swift; sourceTree = "<group>"; };
+		E7A11A0A00000000000000AA /* InputDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputDebugView.swift; sourceTree = "<group>"; };
+		E7A11A0C00000000000000AC /* IbexModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IbexModel.swift; sourceTree = "<group>"; };
+		E7A11A0E00000000000000AE /* ControllerPoseFuser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControllerPoseFuser.swift; sourceTree = "<group>"; };
+		E7A11A1000000000000000B0 /* ibex_ev1.mesh */ = {isa = PBXFileReference; lastKnownFileType = file; path = ibex_ev1.mesh; sourceTree = "<group>"; };
+		E7A11A1200000000000000B2 /* ComponentProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComponentProbe.swift; sourceTree = "<group>"; };
 		E7A98A9D2BE2EEA5003DF333 /* DummyMetalRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DummyMetalRenderer.swift; sourceTree = "<group>"; };
 		E7A98A9F2BE2EEEA003DF333 /* RealityKitClientSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealityKitClientSystem.swift; sourceTree = "<group>"; };
 		E7B122A42C24C7CB005E2758 /* AppStore.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppStore.xcconfig; sourceTree = "<group>"; };
@@ -278,22 +278,6 @@
 			path = Extensions;
 			sourceTree = "<group>";
 		};
-		E7A11A0500000000000000A5 /* Input */ = {
-			isa = PBXGroup;
-			children = (
-				E7A11A0100000000000000A1 /* InputTypes.swift */,
-				E7A11A0300000000000000A3 /* SteamControllerDevice.swift */,
-				E7A11A0600000000000000A6 /* InteractionProfile.swift */,
-				E7A11A0800000000000000A8 /* InputSink.swift */,
-				E7A11A0A00000000000000AA /* InputDebugView.swift */,
-				E7A11A0C00000000000000AC /* IbexModel.swift */,
-				E7A11A0E00000000000000AE /* ControllerPoseFuser.swift */,
-				E7A11A1200000000000000B2 /* ComponentProbe.swift */,
-				E7A11A1000000000000000B0 /* ibex_ev1.mesh */,
-			);
-			path = Input;
-			sourceTree = "<group>";
-		};
 		E71DEFA62C192617008A2074 /* ALVREyeBroadcast */ = {
 			isa = PBXGroup;
 			children = (
@@ -311,6 +295,22 @@
 				E71DEFA42C192617008A2074 /* ReplayKit.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		E7A11A0500000000000000A5 /* Input */ = {
+			isa = PBXGroup;
+			children = (
+				E7A11A0100000000000000A1 /* InputTypes.swift */,
+				E7A11A0300000000000000A3 /* SteamControllerDevice.swift */,
+				E7A11A0600000000000000A6 /* InteractionProfile.swift */,
+				E7A11A0800000000000000A8 /* InputSink.swift */,
+				E7A11A0A00000000000000AA /* InputDebugView.swift */,
+				E7A11A0C00000000000000AC /* IbexModel.swift */,
+				E7A11A0E00000000000000AE /* ControllerPoseFuser.swift */,
+				E7A11A1200000000000000B2 /* ComponentProbe.swift */,
+				E7A11A1000000000000000B0 /* ibex_ev1.mesh */,
+			);
+			path = Input;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -634,7 +634,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)",
 				);
-				MARKETING_VERSION = 20.14.5;
+				MARKETING_VERSION = 20.14.6;
 				PRODUCT_BUNDLE_IDENTIFIER = alvr.client;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -677,7 +677,7 @@
 					"$(inherited)",
 					"$(PROJECT_DIR)",
 				);
-				MARKETING_VERSION = 20.14.5;
+				MARKETING_VERSION = 20.14.6;
 				PRODUCT_BUNDLE_IDENTIFIER = alvr.client;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
