@@ -9,7 +9,6 @@ import UIKit
 struct Entry: View {
     @ObservedObject var eventHandler = EventHandler.shared
     @EnvironmentObject var gStore: GlobalSettingsStore
-    @Binding var chromaKeyColor: Color
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.self) var environment
     @Environment(\.openWindow) private var openWindow
@@ -25,6 +24,26 @@ struct Entry: View {
     }()
     
     @State private var chromaRangeMaximum: Float = 1.0
+
+    // Derived from gStore so the swatch always reflects the persisted color.
+    // A separate @State copy silently drifts if nothing syncs it (see git history).
+    private var chromaKeyColor: Binding<Color> {
+        Binding(
+            get: {
+                Color(.sRGB,
+                      red: Double(gStore.settings.chromaKeyColorR),
+                      green: Double(gStore.settings.chromaKeyColorG),
+                      blue: Double(gStore.settings.chromaKeyColorB))
+            },
+            set: { newValue in
+                let resolved = newValue.resolve(in: environment)
+                gStore.settings.chromaKeyColorR = min(max(resolved.red, 0.0), 1.0)
+                gStore.settings.chromaKeyColorG = min(max(resolved.green, 0.0), 1.0)
+                gStore.settings.chromaKeyColorB = min(max(resolved.blue, 0.0), 1.0)
+                saveAction()
+            }
+        )
+    }
     func applyRangeSettings() {
         if gStore.settings.chromaKeyDistRangeMax < 0.001 {
             gStore.settings.chromaKeyDistRangeMax = 0.001
@@ -176,6 +195,41 @@ struct Entry: View {
                             saveAction()
                         }
                     
+                        ColorPicker("Chroma Key Color", selection: chromaKeyColor)
+                        
+                        Text("Chroma Blend Distance Min/Max").frame(maxWidth: .infinity, alignment: .leading)
+                        HStack {
+                           Slider(value: $gStore.settings.chromaKeyDistRangeMin,
+                                  in: 0...chromaRangeMaximum,
+                                  step: 0.01) {
+                               Text("Chroma Blend Distance Min")
+                           }
+                           .onChange(of: gStore.settings.chromaKeyDistRangeMin) {
+                               applyRangeSettings()
+                           }
+                           TextField("Chroma Blend Distance Min", value: $gStore.settings.chromaKeyDistRangeMin, formatter: chromaFormatter)
+                           .textFieldStyle(RoundedBorderTextFieldStyle())
+                           .onChange(of: gStore.settings.chromaKeyDistRangeMin) {
+                               applyRangeSettings()
+                           }
+                           .frame(width: 100)
+                        }
+                        HStack {
+                           Slider(value: $gStore.settings.chromaKeyDistRangeMax,
+                                  in: 0.001...1,
+                                  step: 0.01) {
+                               Text("Chroma Blend Distance Max")
+                           }
+                           .onChange(of: gStore.settings.chromaKeyDistRangeMax) {
+                               applyRangeSettings()
+                           }
+                           TextField("Chroma Blend Distance Max", value: $gStore.settings.chromaKeyDistRangeMax, formatter: chromaFormatter)
+                           .textFieldStyle(RoundedBorderTextFieldStyle())
+                           .onChange(of: gStore.settings.chromaKeyDistRangeMax) {
+                               applyRangeSettings()
+                           }
+                           .frame(width: 100)
+                        }
 #if IS_ALVR_TESTFLIGHT
                        Toggle(isOn: $gStore.settings.forceMipmapEyeTracking) {
                             Text("Force visionOS 1.x eye tracking")
