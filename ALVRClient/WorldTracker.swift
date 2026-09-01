@@ -378,7 +378,31 @@ class WorldTracker {
     static let rightThumbstickTouched = alvr_path_string_to_id("/user/hand/right/input/thumbstick/touch")
     static let rightSystemTouched = alvr_path_string_to_id("/user/hand/right/input/system/touch")
     static let rightMenuTouched = alvr_path_string_to_id("/user/hand/right/input/menu/touch")
-    
+
+    // Everything this client can send for a hand. Announced alongside an interaction profile so the
+    // streamer can build its automatic button mapping; without it the profile has no bindings.
+    static let leftHandInputIds: [UInt64] = [
+        leftButtonA, leftButtonB, leftButtonX, leftButtonY,
+        leftTriggerClick, leftTriggerValue, leftTriggerSensorValue,
+        leftThumbstickX, leftThumbstickY, leftThumbstickClick,
+        leftSystemClick, leftMenuClick,
+        leftSqueezeClick, leftSqueezeValue, leftSqueezeForce, leftSqueezeSensorValue,
+        leftButtonATouched, leftButtonBTouched, leftButtonXTouched, leftButtonYTouched,
+        leftTriggerTouched, leftSqueezeTouched, leftThumbstickTouched,
+        leftSystemTouched, leftMenuTouched,
+    ]
+
+    static let rightHandInputIds: [UInt64] = [
+        rightButtonA, rightButtonB, rightButtonX, rightButtonY,
+        rightTriggerClick, rightTriggerValue, rightTriggerSensorValue,
+        rightThumbstickX, rightThumbstickY, rightThumbstickClick,
+        rightSystemClick, rightMenuClick,
+        rightSqueezeClick, rightSqueezeValue, rightSqueezeForce, rightSqueezeSensorValue,
+        rightButtonATouched, rightButtonBTouched, rightButtonXTouched, rightButtonYTouched,
+        rightTriggerTouched, rightSqueezeTouched, rightThumbstickTouched,
+        rightSystemTouched, rightMenuTouched,
+    ]
+
     static let appleHandToSteamVRIndex = [
         //eBone_Root
         "wrist": 1,                         //eBone_Wrist
@@ -579,8 +603,8 @@ class WorldTracker {
                 if let alvrSettings = Settings.getAlvrSettings() {
                     let emulationMode = alvrSettings.headset.controllers?.emulation_mode ?? ""
                     if emulationMode == "PSVR2Sense" && detectedPsvr {
-                            alvr_send_active_interaction_profile(WorldTracker.deviceIdLeftHand, WorldTracker.psvrInteractionProfile)
-                            alvr_send_active_interaction_profile(WorldTracker.deviceIdRightHand, WorldTracker.psvrInteractionProfile)
+                            alvrAnnounceInteractionProfile(deviceId: WorldTracker.deviceIdLeftHand, profilePathId: WorldTracker.psvrInteractionProfile, inputIds: WorldTracker.leftHandInputIds)
+                            alvrAnnounceInteractionProfile(deviceId: WorldTracker.deviceIdRightHand, profilePathId: WorldTracker.psvrInteractionProfile, inputIds: WorldTracker.rightHandInputIds)
                     }
                 }
                 for stylus in GCStylus.styli {

@@ -174,6 +174,16 @@ struct Entry: View {
                         }
                         .toggleStyle(.switch)
                     
+                        Toggle(isOn: $gStore.settings.alphaStreamEnabled) {
+                            Text("Enable Alpha Stream Passthrough")
+                            Text("Requires the Alpha Stream passthrough mode on the streamer. Uses a second video decoder.")
+                            .font(.system(size: 10))
+                        }
+                        .toggleStyle(.switch)
+                        .onChange(of: gStore.settings.alphaStreamEnabled) {
+                            saveAction()
+                        }
+                    
                         Toggle(isOn: $gStore.settings.chromaKeyEnabled) {
 #if XCODE_BETA_16
                             if #unavailable(visionOS 2.0) {

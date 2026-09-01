@@ -31,6 +31,9 @@ struct GlobalSettings: Codable {
     var lastUsedAppVersion = "never launched"
     var chaperoneDistanceCm: Int = 0
     var showPerformanceHud: Bool = false
+    // Accept the companion alpha stream of the streamer's 8 bit alpha passthrough mode. Costs a
+    // second hardware decode session, so it can be turned off.
+    var alphaStreamEnabled: Bool = true
     
     init() {}
     
@@ -60,6 +63,7 @@ struct GlobalSettings: Codable {
         self.lastUsedAppVersion = try container.decodeIfPresent(String.self, forKey: .lastUsedAppVersion) ?? self.lastUsedAppVersion
         self.chaperoneDistanceCm = try container.decodeIfPresent(Int.self, forKey: .chaperoneDistanceCm) ?? self.chaperoneDistanceCm
         self.showPerformanceHud = try container.decodeIfPresent(Bool.self, forKey: .showPerformanceHud) ?? self.showPerformanceHud
+        self.alphaStreamEnabled = try container.decodeIfPresent(Bool.self, forKey: .alphaStreamEnabled) ?? self.alphaStreamEnabled
     }
 }
 

@@ -177,7 +177,21 @@ class Renderer {
     //else, we alpha blend them
     //playing with this variable will decide how much the foreground and background blend together
     var chromaKeyLerpDistRange = simd_float2(0.005, 0.1);
-    
+
+    //
+    // Alpha stream shader vars (streamer side 8 bit alpha passthrough mode)
+    //
+    var alphaStreamEnabled = false
+    // Set when the PC application outputs color already multiplied by alpha.
+    var alphaStreamPremultiplied = false
+    // (scale, offset) that expands the alpha stream's luma back to 0...1. Video range luma is
+    // stored as 16...235 of 255, full range needs no correction.
+    var alphaStreamRange = simd_float2(1.0, 0.0)
+    // Alpha frame paired with the color frame being rendered, or nil before the first one arrives.
+    var currentAlphaImageBuffer: CVImageBuffer? = nil
+    // Bound in place of a missing alpha frame, so the shader never samples an unbound texture.
+    var opaqueAlphaTexture: MTLTexture! = nil
+
     init(_ layerRenderer: LayerRenderer?) {
         self.layerRenderer = layerRenderer
         if layerRenderer == nil {
@@ -260,6 +274,11 @@ class Renderer {
         if CVMetalTextureCacheCreate(nil, nil, self.device, nil, &metalTextureCache) != 0 {
             fatalError("CVMetalTextureCacheCreate")
         }
+        let opaqueAlphaDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r8Unorm, width: 1, height: 1, mipmapped: false)
+        opaqueAlphaDescriptor.usage = .shaderRead
+        self.opaqueAlphaTexture = device.makeTexture(descriptor: opaqueAlphaDescriptor)!
+        var opaqueAlphaValue: UInt8 = 255
+        self.opaqueAlphaTexture.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: &opaqueAlphaValue, bytesPerRow: 1)
         fullscreenQuadVertices.withUnsafeBytes {
             fullscreenQuadBuffer = device.makeBuffer(bytes: $0.baseAddress!, length: $0.count)
         }
@@ -548,7 +567,16 @@ class Renderer {
         fragmentConstants.setConstantValue(&currentYuvTransform.columns.1, type: .float4, index: ALVRFunctionConstant.encodingYUVTransform1.rawValue)
         fragmentConstants.setConstantValue(&currentYuvTransform.columns.2, type: .float4, index: ALVRFunctionConstant.encodingYUVTransform2.rawValue)
         fragmentConstants.setConstantValue(&currentYuvTransform.columns.3, type: .float4, index: ALVRFunctionConstant.encodingYUVTransform3.rawValue)
-        
+
+        // The alpha stream overrides chroma keying: it carries the application's own alpha, which
+        // is strictly better than a color derived mask.
+        alphaStreamEnabled = EventHandler.shared.alphaStreamActive
+        alphaStreamPremultiplied = Settings.getAlvrSettings()?.video.passthrough?.AlphaStream?.premultiplied_alpha ?? false
+        alphaStreamRange = EventHandler.shared.alphaStreamLumaRange()
+        fragmentConstants.setConstantValue(&alphaStreamEnabled, type: .bool, index: ALVRFunctionConstant.alphaStreamEnabled.rawValue)
+        fragmentConstants.setConstantValue(&alphaStreamPremultiplied, type: .bool, index: ALVRFunctionConstant.alphaStreamPremultiplied.rawValue)
+        fragmentConstants.setConstantValue(&alphaStreamRange, type: .float2, index: ALVRFunctionConstant.alphaStreamRange.rawValue)
+
         let fragmentFunction = try library?.makeFunction(name: "videoFrameFragmentShader_" + variantName, constantValues: fragmentConstants)
 
         let pipelineDescriptor = MTLRenderPipelineDescriptor()
@@ -730,6 +758,13 @@ class Renderer {
             streamingActiveForFrame = false
         }
         let renderingStreaming = streamingActiveForFrame && queuedFrame != nil
+
+        // Pair the alpha frame with the color frame by timestamp. This never blocks: the color
+        // stream drives pacing, and holding presentation for a late alpha frame would be worse
+        // than one frame of stale alpha.
+        if EventHandler.shared.alphaStreamActive, let queuedFrame = queuedFrame {
+            currentAlphaImageBuffer = EventHandler.shared.dequeueAlphaFrame(targetTimestamp: queuedFrame.timestamp)
+        }
         
         guard let commandBuffer = commandQueue.makeCommandBuffer() else {
             fatalError("Failed to create command buffer")
@@ -852,6 +887,10 @@ class Renderer {
                     needsPipelineRebuild = true
                 }
                 currentYuvTransform = nextYuvTransform
+            }
+
+            if EventHandler.shared.alphaStreamActive != alphaStreamEnabled || EventHandler.shared.alphaStreamLumaRange() != alphaStreamRange {
+                needsPipelineRebuild = true
             }
             
             if needsPipelineRebuild {
@@ -1698,7 +1737,9 @@ class Renderer {
         renderPassDescriptor.colorAttachments[0].texture = renderTargetColor
         renderPassDescriptor.colorAttachments[0].loadAction = whichIdx == 0 ? (isRealityKit ? .dontCare : .clear) : .load
         renderPassDescriptor.colorAttachments[0].storeAction = .store
-        renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0.0, green: 0.0, blue: 0.0, alpha: chromaKeyEnabled ? 0.0 : 1.0)
+        // Uncovered pixels must read as fully transparent in both passthrough modes, otherwise the
+        // clear color itself gets composited over the real world.
+        renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0.0, green: 0.0, blue: 0.0, alpha: (chromaKeyEnabled || alphaStreamEnabled) ? 0.0 : 1.0)
         renderPassDescriptor.rasterizationRateMap = rasterizationRateMap
         
         renderPassDescriptor.renderTargetArrayLength = viewports.count
@@ -1756,6 +1797,24 @@ class Renderer {
             }
             renderEncoder.setFragmentTexture(metalTexture, index: i)
         }
+
+        // Only the luma plane of the alpha stream is sampled: the streamer encodes the alpha plane
+        // as luma with the chroma planes left neutral. Bound even when the alpha stream is off,
+        // because sampling an unbound texture returns zero, which would make the whole frame
+        // transparent if the pipeline in hand still expects it. The opaque 1x1 fallback also
+        // covers a missing alpha frame.
+        var alphaTexture = opaqueAlphaTexture
+        if let alphaImageBuffer = currentAlphaImageBuffer {
+            var alphaTextureOut: CVMetalTexture! = nil
+            let alphaTextureType = VideoHandler.getTextureTypesForFormat(CVPixelBufferGetPixelFormatType(alphaImageBuffer))[0]
+            let err = CVMetalTextureCacheCreateTextureFromImage(
+                    nil, metalTextureCache, alphaImageBuffer, nil, alphaTextureType,
+                    CVPixelBufferGetWidthOfPlane(alphaImageBuffer, 0), CVPixelBufferGetHeightOfPlane(alphaImageBuffer, 0), 0, &alphaTextureOut)
+            if err == 0, let metalTexture = CVMetalTextureGetTexture(alphaTextureOut) {
+                alphaTexture = metalTexture
+            }
+        }
+        renderEncoder.setFragmentTexture(alphaTexture, index: TextureIndex.alpha.rawValue)
         
         // Snoop for pixel formats
         /*for idx in 620..<0xFFFF {

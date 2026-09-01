@@ -37,6 +37,9 @@ typedef NS_ENUM(EnumBackingType, VertexAttribute)
 typedef NS_ENUM(EnumBackingType, TextureIndex)
 {
     TextureIndexColor    = 0,
+    TextureIndexColorUV  = 1,
+    // Luma plane of the companion alpha stream (8 bit alpha passthrough mode).
+    TextureIndexAlpha    = 2,
 };
 
 typedef struct
@@ -86,4 +89,7 @@ typedef NS_ENUM(EnumBackingType, ALVRFunctionConstant)
     ALVRFunctionConstantEncodingYUVTransform1 = 305,
     ALVRFunctionConstantEncodingYUVTransform2 = 306,
     ALVRFunctionConstantEncodingYUVTransform3 = 307,
+    ALVRFunctionConstantAlphaStreamEnabled = 400,
+    ALVRFunctionConstantAlphaStreamPremultiplied = 401,
+    ALVRFunctionConstantAlphaStreamRange = 402,
 };

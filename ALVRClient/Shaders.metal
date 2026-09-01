@@ -120,6 +120,10 @@ constant float4 ENCODING_YUV_TRANSFORM_0 [[ function_constant(ALVRFunctionConsta
 constant float4 ENCODING_YUV_TRANSFORM_1 [[ function_constant(ALVRFunctionConstantEncodingYUVTransform1) ]];
 constant float4 ENCODING_YUV_TRANSFORM_2 [[ function_constant(ALVRFunctionConstantEncodingYUVTransform2) ]];
 constant float4 ENCODING_YUV_TRANSFORM_3 [[ function_constant(ALVRFunctionConstantEncodingYUVTransform3) ]];
+constant bool ALPHA_STREAM_ENABLED [[ function_constant(ALVRFunctionConstantAlphaStreamEnabled) ]];
+constant bool ALPHA_STREAM_PREMULTIPLIED [[ function_constant(ALVRFunctionConstantAlphaStreamPremultiplied) ]];
+// (scale, offset) expanding the alpha stream's luma back to 0...1.
+constant float2 ALPHA_STREAM_RANGE [[ function_constant(ALVRFunctionConstantAlphaStreamRange) ]];
 
 float2 TextureToEyeUV(float2 textureUV, bool isRightEye) {
     // flip distortion horizontally for right eye
@@ -299,11 +303,19 @@ half3 rgb2hsv(half3 rgb) {
     return hsv;
 }
 
-half4 videoFrameFragmentShader_common(half3 color_in) {
+half4 videoFrameFragmentShader_common(half3 color_in, half streamAlpha) {
     half3 color = EncodingNonlinearToLinearRGB_half(color_in, ENCODING_GAMMA);
     
     half4 colorOut = half4(color.rgb, 1.0);
-    if (CHROMAKEY_ENABLED) {
+    if (ALPHA_STREAM_ENABLED) {
+        // Full 8 bit alpha, authored by the PC application and carried by a separate monochrome
+        // stream. The compositor blends the drawable over passthrough with premultiplied alpha and
+        // this pipeline writes fragments straight to the target, so premultiply here unless the
+        // application already did.
+        half3 rgb = ALPHA_STREAM_PREMULTIPLIED ? colorOut.rgb : colorOut.rgb * streamAlpha;
+        return half4(rgb, streamAlpha);
+    }
+    else if (CHROMAKEY_ENABLED) {
         half4 chromaKeyHSV = half4(rgb2hsv(half3(CHROMAKEY_COLOR)), 1.0);
         half4 newHSV = half4(rgb2hsv(color.rgb), 1.0);
         half mask = colorclose_hsv(newHSV.rgb, chromaKeyHSV.rgb, half2(CHROMAKEY_LERP_DIST_RANGE));
@@ -332,7 +344,24 @@ half4 videoFrameFragmentShader_common(half3 color_in) {
     //color = linearToDisplayP3 * color;
 }
 
-fragment half4 videoFrameFragmentShader_YpCbCrBiPlanar(ColorInOut in [[stage_in]], texture2d<half> in_tex_y, texture2d<half> in_tex_uv) {
+// The alpha stream shares the color stream's encoding layout, foveation included, so it is
+// sampled with the same corrected UV.
+half sampleStreamAlpha(texture2d<half> in_tex_alpha, float2 sampleCoord) {
+    if (!ALPHA_STREAM_ENABLED) {
+        return 1.0h;
+    }
+    
+    constexpr sampler alphaSampler(mip_filter::none,
+                                   mag_filter::linear,
+                                   min_filter::linear);
+    half alpha = (in_tex_alpha.sample(alphaSampler, sampleCoord).r - half(ALPHA_STREAM_RANGE.y)) * half(ALPHA_STREAM_RANGE.x);
+    return clamp(alpha, 0.0h, 1.0h);
+}
+
+fragment half4 videoFrameFragmentShader_YpCbCrBiPlanar(ColorInOut in [[stage_in]],
+                                                       texture2d<half> in_tex_y [[texture(TextureIndexColor)]],
+                                                       texture2d<half> in_tex_uv [[texture(TextureIndexColorUV)]],
+                                                       texture2d<half> in_tex_alpha [[texture(TextureIndexAlpha)]]) {
     
     float2 sampleCoord;
     if (FFR_ENABLED) {
@@ -358,10 +387,12 @@ fragment half4 videoFrameFragmentShader_YpCbCrBiPlanar(ColorInOut in [[stage_in]
     half3 rgb_uncorrect = half3((transform * ycbcr).rgb);
     half3 color = NonlinearToLinearRGB_half(rgb_uncorrect);
     
-    return videoFrameFragmentShader_common(color);
+    return videoFrameFragmentShader_common(color, sampleStreamAlpha(in_tex_alpha, sampleCoord));
 }
 
-fragment half4 videoFrameFragmentShader_SecretYpCbCrFormats(ColorInOut in [[stage_in]], texture2d<half> in_tex_y) {
+fragment half4 videoFrameFragmentShader_SecretYpCbCrFormats(ColorInOut in [[stage_in]],
+                                                            texture2d<half> in_tex_y [[texture(TextureIndexColor)]],
+                                                            texture2d<half> in_tex_alpha [[texture(TextureIndexAlpha)]]) {
     
     float2 sampleCoord;
     if (FFR_ENABLED) {
@@ -376,10 +407,12 @@ fragment half4 videoFrameFragmentShader_SecretYpCbCrFormats(ColorInOut in [[stag
     
     half3 color = in_tex_y.sample(colorSampler, sampleCoord).rgb;
     
-    return videoFrameFragmentShader_common(color);
+    return videoFrameFragmentShader_common(color, sampleStreamAlpha(in_tex_alpha, sampleCoord));
 }
 
-fragment float4 videoFrameDepthFragmentShader(ColorInOut in [[stage_in]], texture2d<float> in_tex_y, texture2d<float> in_tex_uv) {
+fragment float4 videoFrameDepthFragmentShader(ColorInOut in [[stage_in]],
+                                              texture2d<float> in_tex_y [[texture(TextureIndexColor)]],
+                                              texture2d<float> in_tex_uv [[texture(TextureIndexColorUV)]]) {
     return float4(0.0, 0.0, 0.0, 0.0);
 }
 

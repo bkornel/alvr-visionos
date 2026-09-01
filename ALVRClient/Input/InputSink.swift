@@ -12,12 +12,23 @@
 
 import Foundation
 
+/// Announces an interaction profile together with the input paths the client can send for it.
+///
+/// The streamer builds its automatic button mapping from those ids, so a profile announced without
+/// them ends up with no bindings at all.
+func alvrAnnounceInteractionProfile(deviceId: UInt64, profilePathId: UInt64, inputIds: [UInt64]) {
+    inputIds.withUnsafeBufferPointer { buffer in
+        alvr_send_active_interaction_profile(deviceId, profilePathId, buffer.baseAddress, UInt64(buffer.count))
+    }
+}
+
 protocol InputSink: AnyObject {
     func send(pathId: UInt64, bool: Bool)
     func send(pathId: UInt64, scalar: Float)
-    /// Announce an OpenXR interaction profile for a device. No-op for sinks
-    /// that aren't talking to a server.
-    func announceProfile(deviceId: UInt64, profilePathId: UInt64)
+    /// Announce an OpenXR interaction profile for a device, along with the input
+    /// paths this client provides for it. No-op for sinks that aren't talking to
+    /// a server.
+    func announceProfile(deviceId: UInt64, profilePathId: UInt64, inputIds: [UInt64])
     /// Offered the raw pre-mapping snapshot. Sinks that only forward bindings
     /// ignore this; it exists so inputs with no binding at all (paddles, QAM,
     /// touchpads) are still observable downstream.
@@ -25,7 +36,7 @@ protocol InputSink: AnyObject {
 }
 
 extension InputSink {
-    func announceProfile(deviceId: UInt64, profilePathId: UInt64) {}
+    func announceProfile(deviceId: UInt64, profilePathId: UInt64, inputIds: [UInt64]) {}
     func record(snapshot: InputSnapshot) {}
 }
 
@@ -59,8 +70,8 @@ final class ALVRInputSink: InputSink {
         alvr_send_button(pathId, Self.scalarVal(scalar))
     }
 
-    func announceProfile(deviceId: UInt64, profilePathId: UInt64) {
-        alvr_send_active_interaction_profile(deviceId, profilePathId)
+    func announceProfile(deviceId: UInt64, profilePathId: UInt64, inputIds: [UInt64]) {
+        alvrAnnounceInteractionProfile(deviceId: deviceId, profilePathId: profilePathId, inputIds: inputIds)
     }
 }
 
@@ -130,8 +141,8 @@ final class TeeInputSink: InputSink {
         for s in sinks { s.send(pathId: pathId, scalar: scalar) }
     }
 
-    func announceProfile(deviceId: UInt64, profilePathId: UInt64) {
-        for s in sinks { s.announceProfile(deviceId: deviceId, profilePathId: profilePathId) }
+    func announceProfile(deviceId: UInt64, profilePathId: UInt64, inputIds: [UInt64]) {
+        for s in sinks { s.announceProfile(deviceId: deviceId, profilePathId: profilePathId, inputIds: inputIds) }
     }
 
     func record(snapshot: InputSnapshot) {

@@ -13,6 +13,7 @@
 
 import Foundation
 import Metal
+import simd
 import VideoToolbox
 import Combine
 import AVKit
@@ -134,6 +135,17 @@ class EventHandler: ObservableObject {
     var av1InstantiatedForReal = false
     var frameQueueLock = NSObject()
 
+    // Companion monochrome alpha stream of the streamer's 8 bit alpha passthrough mode. It is
+    // decoded independently of the color stream and paired with a color frame by timestamp at
+    // render time.
+    var alphaVtDecompressionSession:VTDecompressionSession? = nil
+    var alphaVideoFormat:CMFormatDescription? = nil
+    var alphaStreamActive = false
+    var alphaAv1InstantiatedForReal = false
+    var alphaFrameQueueLock = NSObject()
+    var alphaFrameQueue = [QueuedAlphaFrame]()
+    var lastAlphaImageBuffer: CVImageBuffer? = nil
+
     var frameQueue = [QueuedFrame]()
     var frameQueueLastTimestamp: UInt64 = 0
     var frameQueueLastImageBuffer: CVImageBuffer? = nil
@@ -190,10 +202,11 @@ class EventHandler: ObservableObject {
                 refreshRates = [120, 100, 96, 90]
             }
 
-            let capabilities = AlvrClientCapabilities(default_view_width: UInt32(renderWidth*2), default_view_height: UInt32(renderHeight*2), refresh_rates: refreshRates, refresh_rates_count: UInt64(refreshRates.count), foveated_encoding: true, encoder_high_profile: true, encoder_10_bits: true, encoder_av1: VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1), prefer_10bit: true, prefer_full_range: true, preferred_encoding_gamma: 1.5, prefer_hdr: false)
+            let capabilities = AlvrClientCapabilities(default_view_width: UInt32(renderWidth*2), default_view_height: UInt32(renderHeight*2), max_view_width: UInt32(renderWidth*2), max_view_height: UInt32(renderHeight*2), refresh_rates: refreshRates, refresh_rates_count: UInt64(refreshRates.count), foveated_encoding: true, encoder_high_profile: true, encoder_10_bits: true, encoder_av1: VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1), prefer_10bit: true, preferred_encoding_gamma: 1.5, prefer_hdr: false, alpha_stream: ALVRClientApp.gStore.settings.alphaStreamEnabled)
             alvr_initialize(/*capabilities=*/capabilities)
             alvr_initialize_logging()
             alvr_set_decoder_input_callback(nil, { data in return EventHandler.shared.handleNals(frameData: data) })
+            alvr_set_alpha_decoder_input_callback(nil, { data in return EventHandler.shared.handleAlphaNals(frameData: data) })
             alvr_resume()
         }
     }
@@ -230,6 +243,7 @@ class EventHandler: ObservableObject {
         streamingActive = false
         vtDecompressionSession = nil
         videoFormat = nil
+        clearAlphaStream()
         lastRequestedTimestamp = 0
         lastSubmittedTimestamp = 0
         framesRendered = 0
@@ -426,6 +440,108 @@ class EventHandler: ObservableObject {
         needsEncoderReset = true
     }
     
+    func clearAlphaStream() {
+        alphaVtDecompressionSession = nil
+        alphaVideoFormat = nil
+        alphaStreamActive = false
+        alphaAv1InstantiatedForReal = false
+        objc_sync_enter(alphaFrameQueueLock)
+        alphaFrameQueue.removeAll()
+        lastAlphaImageBuffer = nil
+        objc_sync_exit(alphaFrameQueueLock)
+    }
+
+    // Feed the companion alpha stream into its own decoder.
+    //
+    // Deliberately kept out of the color path's IDR, stutter and statistics bookkeeping: the color
+    // stream owns frame pacing, and reporting both would count every frame twice. Returning false
+    // here would ask for an encoder reset, which is the color stream's business, so this always
+    // returns true; client_core requests IDRs for this stream by itself until it sees a keyframe.
+    func handleAlphaNals(frameData: AlvrVideoFrameData) -> Bool {
+        guard renderStarted, alphaStreamActive else {
+            return true
+        }
+
+        let timestamp = frameData.timestamp_ns
+        let nal = UnsafeMutableBufferPointer<UInt8>(start: UnsafeMutablePointer(mutating: frameData.buffer_ptr), count: Int(frameData.buffer_size))
+
+        if currentCodec == ALVR_CODEC_TYPE_AV1.rawValue && !alphaAv1InstantiatedForReal {
+            print("Creating AV1 alpha codec for real now.")
+            let (attemptSession, attemptFormat) = VideoHandler.createVideoDecoder(initialNals: nal, codec: currentCodec)
+            if attemptSession != nil && attemptFormat != nil {
+                alphaVtDecompressionSession = attemptSession
+                alphaVideoFormat = attemptFormat
+                alphaAv1InstantiatedForReal = true
+            }
+        }
+
+        guard let alphaVtDecompressionSession = alphaVtDecompressionSession,
+              let alphaVideoFormat = alphaVideoFormat else {
+            return true
+        }
+
+        VideoHandler.feedVideoIntoDecoder(decompressionSession: alphaVtDecompressionSession, nals: nal, timestamp: timestamp, videoFormat: alphaVideoFormat, codec: currentCodec) { [self] imageBuffer in
+            guard let imageBuffer = imageBuffer else {
+                return
+            }
+
+            objc_sync_enter(alphaFrameQueueLock)
+            alphaFrameQueue.append(QueuedAlphaFrame(imageBuffer: imageBuffer, timestamp: timestamp))
+            // A desynced stream must not grow this without bound. Anything this far ahead of the
+            // color stream will never be matched anyway.
+            if alphaFrameQueue.count > 4 {
+                alphaFrameQueue.removeFirst()
+            }
+            objc_sync_exit(alphaFrameQueueLock)
+        }
+
+        return true
+    }
+
+    // (scale, offset) that expands the alpha stream's luma back to 0...1.
+    //
+    // The streamer encodes the alpha plane as luma, and VideoToolbox hands it over as stored, so
+    // video range content arrives compressed into 16...235 and has to be expanded. Full range
+    // content needs no correction. Unlike the color path this must not have any gamma applied:
+    // alpha is a linear coverage value, not a color.
+    func alphaStreamLumaRange() -> simd_float2 {
+        guard let alphaVideoFormat = alphaVideoFormat else {
+            return simd_float2(1.0, 0.0)
+        }
+
+        let fullRangeRaw = alphaVideoFormat.extensions[kCMFormatDescriptionExtension_FullRangeVideo as CFString]
+        if let fullRange = (fullRangeRaw as? NSNumber)?.boolValue, fullRange {
+            return simd_float2(1.0, 0.0)
+        }
+
+        return simd_float2(255.0 / 219.0, 16.0 / 255.0)
+    }
+
+    // Returns the alpha frame that belongs with the color frame at targetTimestamp.
+    //
+    // Both decoders emit frames independently, so the queues drift. Frames older than the color
+    // frame can never be matched again and are dropped; a frame that is genuinely ahead is kept
+    // for a later call. Exact timestamp equality is deliberately not required: the renderer
+    // re-presents the last color frame when the decoder returns nothing, and the two decoders can
+    // legitimately be a frame apart. When nothing matches, the previous alpha frame is returned
+    // rather than nil, which is better than flashing opaque for a frame.
+    func dequeueAlphaFrame(targetTimestamp: UInt64) -> CVImageBuffer? {
+        objc_sync_enter(alphaFrameQueueLock)
+        defer { objc_sync_exit(alphaFrameQueueLock) }
+
+        while let first = alphaFrameQueue.first {
+            // A frame more than a second ahead is a timestamp domain mismatch rather than a real
+            // lead, so take it instead of stalling alpha forever.
+            if first.timestamp > targetTimestamp && (first.timestamp &- targetTimestamp) < UInt64(NSEC_PER_SEC) {
+                break
+            }
+            lastAlphaImageBuffer = first.imageBuffer
+            alphaFrameQueue.removeFirst()
+        }
+
+        return lastAlphaImageBuffer
+    }
+
     // Poll for NALs and and, when decoded, add them to the frameQueue
     func handleNals(frameData: AlvrVideoFrameData) -> Bool {
         var retVal = true
@@ -497,7 +613,7 @@ class EventHandler: ObservableObject {
         
         let startedDecodeTime = CACurrentMediaTime()
         
-        if currentCodec == ALVR_CODEC_AV1.rawValue && !av1InstantiatedForReal {
+        if currentCodec == ALVR_CODEC_TYPE_AV1.rawValue && !av1InstantiatedForReal {
             print("Creating AV1 codec for real now.")
             let (attemptVtDecompressionSession, attemptVideoFormat) = VideoHandler.createVideoDecoder(initialNals: nal, codec: currentCodec)
             if attemptVtDecompressionSession != nil && attemptVideoFormat != nil {
@@ -855,12 +971,26 @@ class EventHandler: ObservableObject {
             case ALVR_EVENT_DECODER_CONFIG.rawValue:
                 streamingActive = true
                 currentCodec = Int(alvrEvent.DECODER_CONFIG.codec)
-                print("create decoder \(alvrEvent.DECODER_CONFIG) codec ID: \(currentCodec)")
+                let isAlphaConfig = Int(alvrEvent.DECODER_CONFIG.stream) == Int(ALVR_VIDEO_STREAM_KIND_ALPHA.rawValue)
+                print("create decoder \(alvrEvent.DECODER_CONFIG) codec ID: \(currentCodec) alpha: \(isAlphaConfig)")
                 Settings.clearSettingsCache()
                 updateHostVersion()
 
                 // Don't reinstantiate the decoder if it's already created.
-                if vtDecompressionSession == nil {
+                if isAlphaConfig {
+                    if alphaVtDecompressionSession == nil {
+                        let numBytes = alvr_get_alpha_decoder_config(nil)
+                        let nalBuffer = UnsafeMutableBufferPointer<UInt8>.allocate(capacity: Int(max(numBytes, 1)))
+                        defer { nalBuffer.deallocate() }
+                        alvr_get_alpha_decoder_config(nalBuffer.baseAddress)
+
+                        alphaAv1InstantiatedForReal = false
+                        (alphaVtDecompressionSession, alphaVideoFormat) = VideoHandler.createVideoDecoder(initialNals: nalBuffer, codec: currentCodec)
+                        alphaStreamActive = true
+                        print("Alpha stream announced, decoder ready: \(alphaVtDecompressionSession != nil)")
+                    }
+                }
+                else if vtDecompressionSession == nil {
                     let numBytes = alvr_get_decoder_config(nil)
                     var nalBuffer: UnsafeMutableBufferPointer<UInt8>? = nil
                     if numBytes > 0 {
@@ -990,4 +1120,11 @@ struct QueuedFrame {
     let timestamp: UInt64
     let viewParamsValid: Bool
     let viewParams: [AlvrViewParams]
+}
+
+// A frame of the companion alpha stream. It carries no view params: the color frame it is paired
+// with defines the pose.
+struct QueuedAlphaFrame {
+    let imageBuffer: CVImageBuffer
+    let timestamp: UInt64
 }

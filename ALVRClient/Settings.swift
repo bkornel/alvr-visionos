@@ -10,8 +10,20 @@ enum SettingsError: Error {
 }
 
 struct SettingsCodables {
+    struct AlphaStreamConfig: Codable {
+        @DefaultFalse var premultiplied_alpha: Bool
+    }
+
+    // Only the AlphaStream variant is decoded here; the other passthrough modes are handled
+    // entirely client side. Serde writes enum variants as a single keyed object, so any other mode
+    // simply leaves AlphaStream nil.
+    struct PassthroughConfig: Codable {
+        let AlphaStream: AlphaStreamConfig?
+    }
+
     struct VideoConfig: Codable {
         @OptionSwitch var foveated_encoding: FoveationSettings?
+        @OptionSwitch var passthrough: PassthroughConfig?
     }
     
     //
