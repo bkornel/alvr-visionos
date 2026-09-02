@@ -114,6 +114,16 @@ Prerequisites:
 
 - Xcode with a visionOS SDK, plus command line tools (`xcode-select --install`).
   The project compiles `#if XCODE_BETA_26` code by default (see §5), so Xcode 26 or newer.
+- The **Metal toolchain**. Xcode 26 no longer bundles the Metal compiler; it is a separate
+  downloadable component, and without it
+  [ALVRClient/Shaders.metal](ALVRClient/Shaders.metal) fails with
+  `error: cannot execute tool 'metal' due to missing Metal Toolchain`. This has nothing to do with
+  this branch — every fresh Xcode 26 machine hits it — but it surfaces late, after all the Swift
+  targets have already compiled, so it reads like a shader problem. Install it once (~690 MB):
+
+  ```bash
+  xcodebuild -downloadComponent MetalToolchain
+  ```
 - Rust **1.92 or newer** — the ALVR workspace declares `edition = "2024"`,
   `rust-version = "1.92"`. `rustup update stable`.
 - `cbindgen` (the build script installs it if missing).
