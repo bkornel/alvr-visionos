@@ -11,3 +11,5 @@ ALVRClient.xcodeproj/xcshareddata/
 ALVRClient.xcodeproj/xcshareddata_/
 ALVRClient_bicubic.gputrace/
 ALVRClient_profiled.gputrace/
+
+.claude/settings.local.json
