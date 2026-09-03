@@ -1,8 +1,10 @@
 # AR mode (alpha stream passthrough) on Apple Vision Pro — handoff
 
-Branch: `ar_mode` on `bkornel/alvr-visionos`. Written 2026-09-01 on a Windows machine, so
-**none of it has been compiled or run**. Everything below is either verified against the source
-or explicitly flagged as an assumption.
+Branch: `ar_mode` on `bkornel/alvr-visionos`. First written 2026-09-01 on a Windows machine with
+none of it compiled; **built, signed, deployed to an Apple Vision Pro and validated end to end on
+2026-09-03**. AR mode works: opaque parts of the PC image render normally, alpha-zero parts show
+the room. Sections below marked *Resolved* record what the first run settled; the remaining open
+risks are in §7.
 
 Goal: port axodox's `ar_mode` ALVR modification — full 8 bit alpha streamed as a second
 monochrome video stream, so transparent parts of the PC image show real passthrough — from the
@@ -191,8 +193,17 @@ Entitlements that commonly block a first local build:
 Deploying to the headset (`XROS_DEPLOYMENT_TARGET` is 2.0, `TARGETED_DEVICE_FAMILY = 7`):
 
 1. On the Vision Pro: Settings → Privacy & Security → **Developer Mode** on, then reboot.
-2. Pair it: connected by USB-C, or Xcode → Window → Devices and Simulators → pair over Wi-Fi
-   (the headset must show under Settings → General → Remote Devices).
+2. Pair it over Wi-Fi. **There is no USB-C option**: the Vision Pro's built-in port is battery
+   only, and wired development needs the separately sold Developer Strap.
+
+   **Initiate the pairing from the headset**, not from the Mac: Settings → General →
+   **Remote Devices**, with Xcode's Window → Devices and Simulators open on the Mac. On a
+   corporate network the Mac←headset direction is often the broken one — mDNS from the headset
+   never arrives, so it simply never appears in Xcode, while the Mac's own advertisement still
+   reaches the headset. Verified on CAE's network: `ping` and ARP to the headset worked with 0%
+   loss while `_remotepairing._tcp` and `_apple-mobdev2._tcp` returned nothing at all. Unicast
+   forwarded, multicast filtered. If neither direction works, put both devices on a phone
+   hotspot.
 3. Xcode: select the ALVRClient scheme and the device, then Run. Approve the developer certificate
    on the device the first time (Settings → General → VPN & Device Management).
 4. Headless equivalent:
@@ -206,15 +217,24 @@ The app asks for hands / world sensing / camera permissions on first launch
 
 `ALVRClient.xcconfig` optionally includes `AppStore.xcconfig`, which **is** present in the repo and
 sets `SWIFT_ACTIVE_COMPILATION_CONDITIONS = IS_ALVR_APPSTORE XCODE_BETA_16 XCODE_BETA_26
-XCODE_BETA_27`. It also optionally includes a gitignored `Override.xcconfig`, included last, so if
-the build fails on visionOS 26-only API (`frame.queryDrawables()`, `maxRenderQuality`), create:
+XCODE_BETA_27`. It also optionally includes a gitignored `Override.xcconfig`, included last.
 
-```
-// Override.xcconfig
-SWIFT_ACTIVE_COMPILATION_CONDITIONS = XCODE_BETA_16
-```
+**Do not drop `XCODE_BETA_26` to work around visionOS 26 API.** An earlier version of this document
+suggested an `Override.xcconfig` setting `SWIFT_ACTIVE_COMPILATION_CONDITIONS = XCODE_BETA_16`.
+That no longer compiles — `accessoryTracking` and `queuedFrame` are declared inside
+`#if XCODE_BETA_26` blocks but referenced outside them (9 errors). It is also unnecessary: every
+visionOS 26 call site is already guarded at runtime by `if #available(visionOS 26.0, *)` with a
+pre-26 `else`, `accessoryTracking` is deliberately typed `(any DataProvider)?` rather than
+`AccessoryTrackingProvider?`, and the `@available` on `WorldTracker` is commented out on purpose.
+Verified running on **visionOS 2.3.2** with the stock `XCODE_BETA_26` build.
 
 `XCODE_BETA_27` is referenced by no Swift code; `IS_ALVR_APPSTORE` gates nothing.
+
+**Apple Developer Enterprise Program teams** cannot use `com.apple.developer.low-latency-streaming`
+at all — provisioning refuses to create a profile while the key is present
+(*"Enterprise development teams do not support the Low-Latency Streaming capability"*). Delete it.
+App groups do work on an Enterprise team, and a plain Developer-role member was able to register
+new bundle ids and the app group through automatic signing.
 
 ## 6. Running and verifying
 
@@ -227,6 +247,11 @@ instead of MidnightBlue.
 Client: the "Enable Alpha Stream Passthrough" toggle in the entry UI must be on (it is by default).
 It is read when `alvr_initialize` runs, so toggle it before connecting.
 
+**Restart the streamer between test runs** if it predates commit `03135c66`. Before that fix the
+alpha sender was never cleared on disconnect, so after any reconnect every `send_alpha_video_nal`
+hit a dead channel and no alpha reached the client until the process restarted — a second
+connection would look like a total alpha failure rather than a desync.
+
 What correct looks like: opaque parts of the PC image render as usual, alpha-zero parts show the
 room, semi-transparent parts blend. Logs worth grepping:
 
@@ -235,24 +260,51 @@ room, semi-transparent parts blend. Logs worth grepping:
 - The streamer warns `The alpha stream passthrough mode is not supported by the client` when the
   capability negotiation failed; it then falls back to no passthrough.
 
-## 7. Open risks, in the order they are likely to bite
+## 7. Risks, resolved and open
 
-1. **Generated constant names** — see the grep in §4.
-2. **Premultiplied vs straight alpha.** The shader premultiplies unless the streamer says the app
-   already did. That the visionOS compositor wants premultiplied alpha was *inferred* from the
-   existing chroma-key path (which multiplies rgb by its mask). If edges glow or colors wash out,
-   flip `premultiplied_alpha` in the streamer settings; if that is wrong in both positions, the
-   assumption itself is wrong and `videoFrameFragmentShader_common` needs revisiting.
-3. **Two concurrent hardware decode sessions** at full stream resolution and 90–120 Hz is the real
-   unknown on AVP. If frames drop, the fallback is a streamer-side change: pack alpha into the
-   color frame (an extra strip) so one decoder does both. That is a different design, not a patch.
-4. **Luma range.** The client expands video-range luma using the alpha stream's format description;
-   the Android implementation skips range expansion entirely. If alpha reads grey or clipped
-   (never fully opaque or never fully transparent), look at `alphaStreamLumaRange()`.
-5. **Face/eye tracking**, because of the restored C API shim and the `eyes_combined` choice. It
+Resolved by the first device run (HEVC, visionOS 2.3.2, 90 Hz):
+
+1. **Generated constant names** — *Resolved.* All five names this port assumed exist verbatim. The
+   grep in §4 is now a regression check rather than a question.
+2. **Premultiplied vs straight alpha** — *Resolved in practice.* Composition is correct with the
+   streamer's default; no glowing edges or washed-out colour. The inference held.
+3. **Two concurrent hardware decode sessions** — *Resolved, and it was the real bug, though not in
+   the way this section predicted.* Two sessions at 90 Hz do keep up — no starvation, one dropped
+   alpha frame in 28k — but the alpha frame for timestamp T **lands after the renderer has already
+   committed colour T**. `dequeueAlphaFrame` then substituted the previous alpha, compositing
+   colour T with the mask from T−1. Because AR mode clears the base layer to transparent, pixels
+   where the stale mask said opaque but the new colour held background came out as **opaque black
+   in the shape of the object's silhouette** — visible on every head movement, invisible while
+   still, since consecutive frames are nearly identical.
+
+   Measured: 27% of frames mispaired, lag quantised to exact frame periods (11.11 / 22.22 ms at
+   90 Hz), alpha queue empty at dequeue. Fixed by holding each colour frame in a delay line for
+   `EventHandler.alphaPairingDelayFrames` (default 2) so the matching alpha has time to arrive:
+   **100% exact pairing, mean lag 0.00 ms**, at the cost of ~22 ms latency. Set it to 1 to halve
+   the latency and recover roughly half the mispairs, or 0 for the old behaviour. The
+   streamer-side fallback this section proposed — packing alpha into the colour frame — was not
+   needed.
+4. **Decoder frame identity** — *Was an unverified assumption, now fixed.* Sample buffers carried
+   no PTS (`sampleTimingEntryCount: 0`) and the decoder's `presentationTimeStamp` was ignored, so a
+   decoded frame was identified only by whichever timestamp the callback closure happened to
+   capture. Measurement showed the decoders are in fact strictly in order (`out of sync 0` over
+   28k frames on both streams), but nothing had verified that, and without a PTS VideoToolbox
+   cannot reorder output at all. Frames are now stamped on input and identified by the PTS
+   returned on output.
+
+Still open:
+
+5. **Luma range.** The client expands video-range luma using the alpha stream's format description;
+   the Android implementation skips range expansion entirely. Nothing anomalous observed, but
+   partial transparency was not deliberately tested. If alpha reads grey or clipped, look at
+   `alphaStreamLumaRange()`.
+6. **AV1 and H.264 are untested.** Only HEVC has been run. AV1 remains the awkward one — the
+   streamer sends an empty alpha decoder config, so the session can only be built from the first
+   frame (`alphaAv1InstantiatedForReal`).
+7. **Face/eye tracking**, because of the restored C API shim and the `eyes_combined` choice. It
    drives foveated encoding, so a regression shows up as wrong foveation, not just missing
    expressions.
-6. **Audio after a crown double-tap** may be broken — svrc's CoreAudio workaround was not ported.
+8. **Audio after a crown double-tap** may be broken — svrc's CoreAudio workaround was not ported.
 
 ## 8. If you are a Claude session picking this up
 
@@ -265,5 +317,20 @@ context that is not in the diffs:
   `alvr/client_openxr/src/stream.rs` (`dequeue_alpha_frame`), `alvr/graphics/src/stream.rs` and
   `alvr/graphics/resources/stream.wgsl` in the submodule. Deviations from it in the Swift code are
   deliberate and commented.
-- Nothing here has been compiled. Expect a first round of ordinary Swift/Metal compile errors, and
-  treat any mismatch against the generated header as the most likely cause.
+- It compiles clean and runs. Toolchain used: Xcode 26.6, visionOS 26.5 SDK, Rust 1.98, on
+  visionOS 2.3.2. There were no Swift or Metal compile errors on the first attempt; the only build
+  blocker was the missing Metal toolchain component (§4).
+- **Client logging is filtered twice, and both defaults hide everything.** `env_logger` defaults to
+  `Error` when `RUST_LOG` is unset — fixed on the submodule branch, since that filter also gated
+  the `send_log` call that forwards to the streamer. Then, once connected, `send_log` consults the
+  *streamer's* `client_log_report_level`, which also defaults to `Error`
+  (`alvr/session/src/settings.rs`) and whose `false` return suppresses the stderr write as well.
+  So `alvr_log` at Info or Warn reaches nowhere by default. Swift `print()` bypasses both and shows
+  up reliably; raise the dashboard setting to Info if you want `alvr_log` in `session_log.txt`.
+- **Reading logs off the headset**: `log stream` has no device option and `devicectl` cannot attach
+  to a running process, so the only route is
+  `xcrun devicectl device process launch --console com.<you>.alvr.client`, which relaunches the app.
+- The pairing and decoder-identity diagnostics that produced the numbers in §7 are still in the
+  code, gated off by `EventHandler.alphaPairingDiagnosticsEnabled` and
+  `VideoHandler.decoderPtsDiagnosticsEnabled`. Flip either to `true` to re-measure; they cost
+  nothing while false.
