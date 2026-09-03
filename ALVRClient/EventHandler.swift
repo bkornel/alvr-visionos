@@ -145,6 +145,7 @@ class EventHandler: ObservableObject {
     var alphaFrameQueueLock = NSObject()
     var alphaFrameQueue = [QueuedAlphaFrame]()
     var lastAlphaImageBuffer: CVImageBuffer? = nil
+    var lastAlphaTargetTimestamp: UInt64 = 0
 
     var frameQueue = [QueuedFrame]()
     var frameQueueLastTimestamp: UInt64 = 0
@@ -448,6 +449,7 @@ class EventHandler: ObservableObject {
         objc_sync_enter(alphaFrameQueueLock)
         alphaFrameQueue.removeAll()
         lastAlphaImageBuffer = nil
+        lastAlphaTargetTimestamp = 0
         objc_sync_exit(alphaFrameQueueLock)
     }
 
@@ -487,10 +489,13 @@ class EventHandler: ObservableObject {
 
             objc_sync_enter(alphaFrameQueueLock)
             alphaFrameQueue.append(QueuedAlphaFrame(imageBuffer: imageBuffer, timestamp: timestamp))
-            // A desynced stream must not grow this without bound. Anything this far ahead of the
-            // color stream will never be matched anyway.
-            if alphaFrameQueue.count > 4 {
+            // Frames behind the last color frame we were asked to match can never be paired again.
+            while let first = alphaFrameQueue.first, first.timestamp < lastAlphaTargetTimestamp {
                 alphaFrameQueue.removeFirst()
+            }
+            // Still over budget means alpha runs ahead: drop the newest, never the head that matches next.
+            while alphaFrameQueue.count > 4 {
+                alphaFrameQueue.removeLast()
             }
             objc_sync_exit(alphaFrameQueueLock)
         }
@@ -528,6 +533,8 @@ class EventHandler: ObservableObject {
     func dequeueAlphaFrame(targetTimestamp: UInt64) -> CVImageBuffer? {
         objc_sync_enter(alphaFrameQueueLock)
         defer { objc_sync_exit(alphaFrameQueueLock) }
+
+        lastAlphaTargetTimestamp = targetTimestamp
 
         while let first = alphaFrameQueue.first {
             // A frame more than a second ahead is a timestamp domain mismatch rather than a real
