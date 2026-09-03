@@ -147,7 +147,33 @@ class EventHandler: ObservableObject {
     var lastAlphaImageBuffer: CVImageBuffer? = nil
     var lastAlphaTargetTimestamp: UInt64 = 0
 
+    // Off by default: this runs once per rendered frame. Flip to true to re-measure pairing.
+    static let alphaPairingDiagnosticsEnabled = false
+
+    // Diagnostics for alpha/color pairing. The renderer pairs loosely by design, so a stale alpha
+    // is substituted silently; these count how often that happens and by how much.
+    var lastAlphaTimestamp: UInt64 = 0
+    var alphaPairSamples: Int = 0
+    var alphaPairExact: Int = 0
+    var alphaPairStarved: Int = 0
+    var alphaPairLagSumNs: Int64 = 0
+    var alphaPairLagMaxNs: Int64 = 0
+    var alphaPairStatsLastLog: Double = 0
+
     var frameQueue = [QueuedFrame]()
+
+    // Alpha pairing delay line. The alpha stream is a second encoder, a second network stream and a
+    // second decoder, so its frame for timestamp T lands after the renderer has already committed
+    // colour T and fallen back to a stale alpha. Measured on device: 27% of frames mispaired, with
+    // the lag quantised to exact frame periods (11.11 ms / 22.22 ms at 90 Hz), queue empty at
+    // dequeue, and essentially no starvation - the frames arrive, just late.
+    //
+    // Holding each colour frame for this many frames lets the matching alpha catch up, at the cost
+    // of that much latency. 2 covers the common case; 3 also covers the rare 33 ms outlier.
+    // 0 restores the previous behaviour (present immediately, tolerate stale alpha).
+    static let alphaPairingDelayFrames = 2
+    var colorDelayLine = [QueuedFrame]()
+
     var frameQueueLastTimestamp: UInt64 = 0
     var frameQueueLastImageBuffer: CVImageBuffer? = nil
     var lastQueuedFrame: QueuedFrame? = nil
@@ -450,6 +476,12 @@ class EventHandler: ObservableObject {
         alphaFrameQueue.removeAll()
         lastAlphaImageBuffer = nil
         lastAlphaTargetTimestamp = 0
+        lastAlphaTimestamp = 0
+        alphaPairSamples = 0
+        alphaPairExact = 0
+        alphaPairStarved = 0
+        alphaPairLagSumNs = 0
+        alphaPairLagMaxNs = 0
         objc_sync_exit(alphaFrameQueueLock)
     }
 
@@ -482,10 +514,12 @@ class EventHandler: ObservableObject {
             return true
         }
 
-        VideoHandler.feedVideoIntoDecoder(decompressionSession: alphaVtDecompressionSession, nals: nal, timestamp: timestamp, videoFormat: alphaVideoFormat, codec: currentCodec) { [self] imageBuffer in
+        VideoHandler.feedVideoIntoDecoder(decompressionSession: alphaVtDecompressionSession, nals: nal, timestamp: timestamp, videoFormat: alphaVideoFormat, codec: currentCodec, stream: "alpha") { [self] imageBuffer, decodedTimestamp in
             guard let imageBuffer = imageBuffer else {
                 return
             }
+            // Identify the frame by what the decoder returned, not by what we happened to feed last.
+            let timestamp = decodedTimestamp
 
             objc_sync_enter(alphaFrameQueueLock)
             alphaFrameQueue.append(QueuedAlphaFrame(imageBuffer: imageBuffer, timestamp: timestamp))
@@ -522,6 +556,22 @@ class EventHandler: ObservableObject {
         return simd_float2(255.0 / 219.0, 16.0 / 255.0)
     }
 
+    // Hands the colour frame to the renderer, delayed by alphaPairingDelayFrames while the alpha
+    // stream is active so the matching alpha has time to arrive. Caller must hold frameQueueLock.
+    // With no alpha stream this is a straight append and behaviour is unchanged.
+    private func enqueueColorFrame(_ frame: QueuedFrame) {
+        guard alphaStreamActive, EventHandler.alphaPairingDelayFrames > 0 else {
+            colorDelayLine.removeAll()
+            frameQueue.append(frame)
+            return
+        }
+
+        colorDelayLine.append(frame)
+        while colorDelayLine.count > EventHandler.alphaPairingDelayFrames {
+            frameQueue.append(colorDelayLine.removeFirst())
+        }
+    }
+
     // Returns the alpha frame that belongs with the color frame at targetTimestamp.
     //
     // Both decoders emit frames independently, so the queues drift. Frames older than the color
@@ -543,10 +593,60 @@ class EventHandler: ObservableObject {
                 break
             }
             lastAlphaImageBuffer = first.imageBuffer
+            lastAlphaTimestamp = first.timestamp
             alphaFrameQueue.removeFirst()
         }
 
+        recordAlphaPairing(targetTimestamp: targetTimestamp)
+
         return lastAlphaImageBuffer
+    }
+
+    // Called with the queue lock held. Reports once a second rather than per frame.
+    private func recordAlphaPairing(targetTimestamp: UInt64) {
+        guard EventHandler.alphaPairingDiagnosticsEnabled else { return }
+
+        guard lastAlphaTimestamp != 0 else {
+            alphaPairStarved += 1
+            return
+        }
+
+        let lagNs = Int64(bitPattern: targetTimestamp) - Int64(bitPattern: lastAlphaTimestamp)
+        alphaPairSamples += 1
+        if lagNs == 0 {
+            alphaPairExact += 1
+        }
+        alphaPairLagSumNs += lagNs
+        if abs(lagNs) > abs(alphaPairLagMaxNs) {
+            alphaPairLagMaxNs = lagNs
+        }
+
+        let now = CACurrentMediaTime()
+        if alphaPairStatsLastLog == 0 {
+            alphaPairStatsLastLog = now
+            return
+        }
+        guard now - alphaPairStatsLastLog >= 1.0, alphaPairSamples > 0 else {
+            return
+        }
+
+        let exactPct = 100.0 * Double(alphaPairExact) / Double(alphaPairSamples)
+        let meanMs = Double(alphaPairLagSumNs) / Double(alphaPairSamples) / 1_000_000.0
+        let maxMs = Double(alphaPairLagMaxNs) / 1_000_000.0
+        // alvr_log reaches the streamer's session_log.txt via ClientControlPacket::Log, so a test
+        // run is recorded without attaching a console to the headset.
+        let msg = String(format:
+            "alpha pairing: %d frames, exact %d (%.1f%%), mean lag %+.2f ms, max lag %+.2f ms, queue %d, starved %d",
+            alphaPairSamples, alphaPairExact, exactPct, meanMs, maxMs, alphaFrameQueue.count, alphaPairStarved)
+        print(msg)
+        alvr_log(AlvrLogLevel(ALVR_LOG_LEVEL_INFO.rawValue), msg)
+
+        alphaPairStatsLastLog = now
+        alphaPairSamples = 0
+        alphaPairExact = 0
+        alphaPairStarved = 0
+        alphaPairLagSumNs = 0
+        alphaPairLagMaxNs = 0
     }
 
     // Poll for NALs and and, when decoded, add them to the frameQueue
@@ -631,11 +731,13 @@ class EventHandler: ObservableObject {
         }
 
         if let vtDecompressionSession = self.vtDecompressionSession {
-            VideoHandler.feedVideoIntoDecoder(decompressionSession: vtDecompressionSession, nals: nal, timestamp: timestamp, videoFormat: self.videoFormat!, codec: currentCodec) { [self] imageBuffer in
+            VideoHandler.feedVideoIntoDecoder(decompressionSession: vtDecompressionSession, nals: nal, timestamp: timestamp, videoFormat: self.videoFormat!, codec: currentCodec, stream: "color") { [self] imageBuffer, decodedTimestamp in
                 guard let imageBuffer = imageBuffer else {
                     //print("Frame not decoded")
                     return
                 }
+                // Identify the frame by what the decoder returned, not by what we happened to feed last.
+                let timestamp = decodedTimestamp
                 if ALVRClientApp.gStore.settings.showPerformanceHud {
                     PerformanceTracker.shared.recordDecodeEnd(timestampNs: timestamp)
                 }
@@ -671,13 +773,7 @@ class EventHandler: ObservableObject {
                     // But for whatever reason this is fine at high FPS.
                     // From what I've read online, the only way to know if an H264 frame has actually completed is if
                     // the next frame is starting, so keep this around for now just in case.
-                    if frameQueueLastImageBuffer != nil {
-                        //frameQueue.append(QueuedFrame(imageBuffer: frameQueueLastImageBuffer!, timestamp: frameQueueLastTimestamp))
-                        frameQueue.append(QueuedFrame(imageBuffer: imageBuffer, timestamp: timestamp, viewParamsValid: false, viewParams: viewParamsDummy))
-                    }
-                    else {
-                        frameQueue.append(QueuedFrame(imageBuffer: imageBuffer, timestamp: timestamp, viewParamsValid: false, viewParams: viewParamsDummy))
-                    }
+                    enqueueColorFrame(QueuedFrame(imageBuffer: imageBuffer, timestamp: timestamp, viewParamsValid: false, viewParams: viewParamsDummy))
                     // TODO: make this configurable
                     if frameQueue.count > 2 {
                         frameQueue.removeFirst()

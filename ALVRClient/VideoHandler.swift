@@ -475,15 +475,20 @@ struct VideoHandler {
 
     // MARK: - CMSampleBuffer gymnastics
     
-    private static func bufferToCMSampleBuffer(buffer: UnsafeMutableBufferPointer<UInt8>, videoFormat: CMFormatDescription) -> CMSampleBuffer? {
+    private static func bufferToCMSampleBuffer(buffer: UnsafeMutableBufferPointer<UInt8>, videoFormat: CMFormatDescription, timestamp: UInt64) -> CMSampleBuffer? {
         var err: OSStatus = 0
         var offset = 0
 
         let umrbp = UnsafeMutableRawBufferPointer(start: buffer.baseAddress, count: buffer.count)
         let bb = try! CMBlockBuffer.init(buffer: umrbp, deallocator: {(_, _) in /*buffer.deallocate()*/ }, flags: .assureMemoryNow)
         
+        // Stamp the sample with the packet timestamp so the decoder hands the identity back on
+        // output. Without this the emitted frame is anonymous and can only be matched positionally.
+        var timing = CMSampleTimingInfo(duration: .invalid,
+                                        presentationTimeStamp: CMTime(value: CMTimeValue(timestamp), timescale: 1_000_000_000),
+                                        decodeTimeStamp: .invalid)
         var sampleBuffer: CMSampleBuffer!
-        err = CMSampleBufferCreate(allocator: nil, dataBuffer: bb, dataReady: true, makeDataReadyCallback: nil, refcon: nil, formatDescription: videoFormat, sampleCount: 1, sampleTimingEntryCount: 0, sampleTimingArray: nil, sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sampleBuffer)
+        err = CMSampleBufferCreate(allocator: nil, dataBuffer: bb, dataReady: true, makeDataReadyCallback: nil, refcon: nil, formatDescription: videoFormat, sampleCount: 1, sampleTimingEntryCount: 1, sampleTimingArray: &timing, sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sampleBuffer)
         if err != 0 {
             print("CMSampleBufferCreate error")
             return nil
@@ -493,18 +498,18 @@ struct VideoHandler {
     }
     
     // Based on https://webrtc.googlesource.com/src/+/refs/heads/main/sdk/objc/components/video_codec/nalu_rewriter.cc
-    private static func annexBBufferToCMSampleBuffer(buffer: UnsafeMutableBufferPointer<UInt8>, videoFormat: CMFormatDescription) -> CMSampleBuffer? {
+    private static func annexBBufferToCMSampleBuffer(buffer: UnsafeMutableBufferPointer<UInt8>, videoFormat: CMFormatDescription, timestamp: UInt64) -> CMSampleBuffer? {
         let (naluIndices, elgibleForModifyInPlace) = findNaluIndices(bufferBounded: buffer)
         
         if elgibleForModifyInPlace {
-            return annexBBufferToCMSampleBufferModifyInPlace(buffer: buffer, videoFormat: videoFormat, naluIndices: naluIndices)
+            return annexBBufferToCMSampleBufferModifyInPlace(buffer: buffer, videoFormat: videoFormat, naluIndices: naluIndices, timestamp: timestamp)
         }
         else {
-            return annexBBufferToCMSampleBufferWithCopy(buffer: buffer, videoFormat: videoFormat, naluIndices: naluIndices)
+            return annexBBufferToCMSampleBufferWithCopy(buffer: buffer, videoFormat: videoFormat, naluIndices: naluIndices, timestamp: timestamp)
         }
     }
     
-    private static func annexBBufferToCMSampleBufferWithCopy(buffer: UnsafeMutableBufferPointer<UInt8>, videoFormat: CMFormatDescription, naluIndices: [NaluIndex]) -> CMSampleBuffer? {
+    private static func annexBBufferToCMSampleBufferWithCopy(buffer: UnsafeMutableBufferPointer<UInt8>, videoFormat: CMFormatDescription, naluIndices: [NaluIndex], timestamp: UInt64) -> CMSampleBuffer? {
         var err: OSStatus = 0
         //defer { buffer.deallocate() }
 
@@ -549,8 +554,13 @@ struct VideoHandler {
             }
         }
         
+        // Stamp the sample with the packet timestamp so the decoder hands the identity back on
+        // output. Without this the emitted frame is anonymous and can only be matched positionally.
+        var timing = CMSampleTimingInfo(duration: .invalid,
+                                        presentationTimeStamp: CMTime(value: CMTimeValue(timestamp), timescale: 1_000_000_000),
+                                        decodeTimeStamp: .invalid)
         var sampleBuffer: CMSampleBuffer!
-        err = CMSampleBufferCreate(allocator: nil, dataBuffer: contiguousBuffer, dataReady: true, makeDataReadyCallback: nil, refcon: nil, formatDescription: videoFormat, sampleCount: 1, sampleTimingEntryCount: 0, sampleTimingArray: nil, sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sampleBuffer)
+        err = CMSampleBufferCreate(allocator: nil, dataBuffer: contiguousBuffer, dataReady: true, makeDataReadyCallback: nil, refcon: nil, formatDescription: videoFormat, sampleCount: 1, sampleTimingEntryCount: 1, sampleTimingArray: &timing, sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sampleBuffer)
         if err != 0 {
             print("CMSampleBufferCreate error")
             return nil
@@ -559,7 +569,7 @@ struct VideoHandler {
         return sampleBuffer
     }
     
-    private static func annexBBufferToCMSampleBufferModifyInPlace(buffer: UnsafeMutableBufferPointer<UInt8>, videoFormat: CMFormatDescription, naluIndices: [NaluIndex]) -> CMSampleBuffer? {
+    private static func annexBBufferToCMSampleBufferModifyInPlace(buffer: UnsafeMutableBufferPointer<UInt8>, videoFormat: CMFormatDescription, naluIndices: [NaluIndex], timestamp: UInt64) -> CMSampleBuffer? {
         var err: OSStatus = 0
         var offset = 0
 
@@ -577,8 +587,13 @@ struct VideoHandler {
             offset += index.payloadSize
         }
         
+        // Stamp the sample with the packet timestamp so the decoder hands the identity back on
+        // output. Without this the emitted frame is anonymous and can only be matched positionally.
+        var timing = CMSampleTimingInfo(duration: .invalid,
+                                        presentationTimeStamp: CMTime(value: CMTimeValue(timestamp), timescale: 1_000_000_000),
+                                        decodeTimeStamp: .invalid)
         var sampleBuffer: CMSampleBuffer!
-        err = CMSampleBufferCreate(allocator: nil, dataBuffer: bb, dataReady: true, makeDataReadyCallback: nil, refcon: nil, formatDescription: videoFormat, sampleCount: 1, sampleTimingEntryCount: 0, sampleTimingArray: nil, sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sampleBuffer)
+        err = CMSampleBufferCreate(allocator: nil, dataBuffer: bb, dataReady: true, makeDataReadyCallback: nil, refcon: nil, formatDescription: videoFormat, sampleCount: 1, sampleTimingEntryCount: 1, sampleTimingArray: &timing, sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sampleBuffer)
         if err != 0 {
             print("CMSampleBufferCreate error")
             return nil
@@ -589,12 +604,12 @@ struct VideoHandler {
     
     // MARK: - Actually feed the NALs/OBUs into the decoder
     
-    static func feedVideoIntoDecoder(decompressionSession: VTDecompressionSession, nals: UnsafeMutableBufferPointer<UInt8>, timestamp: UInt64, videoFormat: CMFormatDescription, codec: Int, callback: @escaping (_ imageBuffer: CVImageBuffer?) -> Void) {
+    static func feedVideoIntoDecoder(decompressionSession: VTDecompressionSession, nals: UnsafeMutableBufferPointer<UInt8>, timestamp: UInt64, videoFormat: CMFormatDescription, codec: Int, stream: String = "color", callback: @escaping (_ imageBuffer: CVImageBuffer?, _ decodedTimestamp: UInt64) -> Void) {
         var err:OSStatus = 0
         guard let sampleBuffer =
             (codec == ALVR_CODEC_TYPE_AV1.rawValue) ?
-                bufferToCMSampleBuffer(buffer: nals, videoFormat: videoFormat) // OBUs
-                : annexBBufferToCMSampleBuffer(buffer: nals, videoFormat: videoFormat) // NALs
+                bufferToCMSampleBuffer(buffer: nals, videoFormat: videoFormat, timestamp: timestamp) // OBUs
+                : annexBBufferToCMSampleBuffer(buffer: nals, videoFormat: videoFormat, timestamp: timestamp) // NALs
         else {
             print("Failed in annexBBufferToCMSampleBuffer")
             return
@@ -617,13 +632,78 @@ struct VideoHandler {
                 //alvr_report_fatal_decoder_error("VideoToolbox decoder failed with status: \(status)")
             }
 
-            callback(imageBuffer)
+            // The decoder returns the PTS we stamped on input. If it differs from the frame we just
+            // fed, VideoToolbox reordered or delayed output and positional matching would have
+            // silently paired the wrong alpha with the wrong color.
+            let decodedTimestamp = decodedTimestampFrom(presentationTimeStamp, fedTimestamp: timestamp)
+            recordDecoderPts(stream: stream, fed: timestamp, decoded: decodedTimestamp)
+
+            callback(imageBuffer, decodedTimestamp)
         }
         if err != 0 {
             //fatalError("VTDecompressionSessionDecodeFrame")
         }
     }
     
+    // MARK: - Decoder timestamp identity
+
+    // Off by default: this runs per decoded frame on both streams. Flip to true to re-measure
+    // decoder frame identity; with it false the guard below is constant-folded away.
+    static let decoderPtsDiagnosticsEnabled = false
+
+    private static let ptsStatsLock = NSLock()
+    private static var ptsMatched: [String: Int] = [:]
+    private static var ptsMismatched: [String: Int] = [:]
+    private static var ptsInvalid: [String: Int] = [:]
+    private static var ptsLastLog: Double = 0
+
+    private static func decodedTimestampFrom(_ pts: CMTime, fedTimestamp: UInt64) -> UInt64 {
+        guard pts.isValid && !pts.isIndefinite && pts.value >= 0 else {
+            return fedTimestamp
+        }
+        let ns = CMTimeConvertScale(pts, timescale: 1_000_000_000, method: .roundHalfAwayFromZero)
+        guard ns.isValid && ns.value >= 0 else {
+            return fedTimestamp
+        }
+        return UInt64(ns.value)
+    }
+
+    private static func recordDecoderPts(stream: String, fed: UInt64, decoded: UInt64) {
+        guard decoderPtsDiagnosticsEnabled else { return }
+
+        ptsStatsLock.lock()
+        defer { ptsStatsLock.unlock() }
+
+        if decoded == fed {
+            ptsMatched[stream, default: 0] += 1
+        } else {
+            ptsMismatched[stream, default: 0] += 1
+            let deltaMs = (Double(Int64(bitPattern: decoded) - Int64(bitPattern: fed))) / 1_000_000.0
+            let msg = String(format: "decoder out of sync [%@]: fed %llu, decoder returned %llu (%+.2f ms)",
+                             stream, fed, decoded, deltaMs)
+            // print() bypasses the Rust log filter, which the streamer pins to Error by default
+            // (client_log_report_level) and which silently drops stderr writes too.
+            print(msg)
+            alvr_log(AlvrLogLevel(ALVR_LOG_LEVEL_WARN.rawValue), msg)
+        }
+
+        let now = CACurrentMediaTime()
+        if ptsLastLog == 0 { ptsLastLog = now; return }
+        guard now - ptsLastLog >= 1.0 else { return }
+        ptsLastLog = now
+
+        for key in Set(ptsMatched.keys).union(ptsMismatched.keys).union(ptsInvalid.keys).sorted() {
+            let ok = ptsMatched[key] ?? 0
+            let bad = ptsMismatched[key] ?? 0
+            let msg = String(format: "decoder pts [%@]: in-order %d, out of sync %d", key, ok, bad)
+            print(msg)
+            alvr_log(AlvrLogLevel(ALVR_LOG_LEVEL_INFO.rawValue), msg)
+        }
+        ptsMatched.removeAll()
+        ptsMismatched.removeAll()
+        ptsInvalid.removeAll()
+    }
+
     // MARK: - Video format helpers
     
     // Useful for debugging.
