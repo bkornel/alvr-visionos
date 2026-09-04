@@ -8,8 +8,9 @@
 // Configuration settings file format documentation can be found at:
 // https://help.apple.com/xcode/#/dev745c5c974
 
-DEVELOPMENT_TEAM = RU563H7L76
-PRODUCT_BUNDLE_IDENTIFIER = com.cae.alvr.client
+// DEVELOPMENT_TEAM is deliberately not set here. Put your team id in Override.xcconfig,
+// which is gitignored and included last, so signing identity stays out of the repo.
+PRODUCT_BUNDLE_IDENTIFIER = dev.alphastream.client
 
 #include? "AppStore.xcconfig"
 #include? "Override.xcconfig"

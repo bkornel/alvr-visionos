@@ -614,7 +614,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "\"ALVRClient/Preview Content\"";
-				DEVELOPMENT_TEAM = RU563H7L76;
 				ENABLE_PREVIEWS = YES;
 				EXCLUDED_ARCHS = x86_64;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -635,7 +634,7 @@
 					"$(PROJECT_DIR)",
 				);
 				MARKETING_VERSION = 20.14.6;
-				PRODUCT_BUNDLE_IDENTIFIER = com.cae.alvr.client;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alphastream.client;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -657,7 +656,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "\"ALVRClient/Preview Content\"";
-				DEVELOPMENT_TEAM = RU563H7L76;
 				ENABLE_PREVIEWS = YES;
 				EXCLUDED_ARCHS = x86_64;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -678,7 +676,7 @@
 					"$(PROJECT_DIR)",
 				);
 				MARKETING_VERSION = 20.14.6;
-				PRODUCT_BUNDLE_IDENTIFIER = com.cae.alvr.client;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alphastream.client;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -692,11 +690,11 @@
 		};
 		E71DEFAE2C192617008A2074 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = D68FA8042B73D5DD0052B7FF /* ALVRClient.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ALVREyeBroadcast/ALVREyeBroadcast.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = RU563H7L76;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ALVREyeBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Send Eye Tracking To ALVR";
@@ -707,7 +705,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.cae.alvr.client.ALVREyeBroadcast;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alphastream.client.ALVREyeBroadcast;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -720,11 +718,11 @@
 		};
 		E71DEFAF2C192617008A2074 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = D68FA8042B73D5DD0052B7FF /* ALVRClient.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ALVREyeBroadcast/ALVREyeBroadcast.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = RU563H7L76;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ALVREyeBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Send Eye Tracking To ALVR";
@@ -735,7 +733,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.cae.alvr.client.ALVREyeBroadcast;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.alphastream.client.ALVREyeBroadcast;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";

@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.cae.alvr.client.ALVR</string>
+		<string>group.dev.alphastream.client</string>
 	</array>
 </dict>
 </plist>

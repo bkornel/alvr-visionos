@@ -164,25 +164,43 @@ across `EventHandler.swift` and `VideoHandler.swift`.
 
 ## 5. Signing and sideloading
 
-The project is set up for the ALVR team, so a local build needs your own identity. `DEVELOPMENT_TEAM`
-and `PRODUCT_BUNDLE_IDENTIFIER` are set **per target in the pbxproj**, which overrides
-`ALVRClient.xcconfig`, so change them in Xcode's UI (Signing & Capabilities), not in an xcconfig:
+A local build needs your own signing identity, and **`DEVELOPMENT_TEAM` is deliberately not in the
+repo**. Put it in `Override.xcconfig`, which is gitignored and included last by
+`ALVRClient.xcconfig`:
 
-| Target | Current | Change to something like |
-|---|---|---|
-| ALVRClient | `alvr.client` | `com.<you>.alvr.client` |
-| ALVREyeBroadcast | `alvr.client.ALVREyeBroadcast` | `com.<you>.alvr.client.ALVREyeBroadcast` |
+```
+// Override.xcconfig
+DEVELOPMENT_TEAM = <your 10-character team id>
+```
 
-`alvr.client` belongs to the ALVR team's App Store record, so automatic signing cannot register it
-for you.
+Find the team id at developer.apple.com/account → Membership details, or let Xcode write it by
+picking the team in Signing & Capabilities — but then move it out of the pbxproj again, so nobody
+publishes their employer's team id by accident.
+
+Both targets read that xcconfig. `DEVELOPMENT_TEAM` was removed from all four pbxproj build
+configurations and the ALVREyeBroadcast configurations were given
+`baseConfigurationReference = ALVRClient.xcconfig`; without that the extension fails with
+*"Signing for ALVREyeBroadcast requires a development team"* while the app target builds fine.
+
+The bundle ids are neutral placeholders and only need changing if they collide with something your
+team has already registered — App IDs are unique across all Apple teams:
+
+| Target | Bundle id |
+|---|---|
+| ALVRClient | `dev.alphastream.client` |
+| ALVREyeBroadcast | `dev.alphastream.client.ALVREyeBroadcast` |
+| App group (both entitlements) | `group.dev.alphastream.client` |
+
+The extension's id must stay prefixed by the app's. The upstream ids (`alvr.client`) cannot be used
+at all: they belong to the ALVR team's App Store record, so automatic signing cannot register them
+for anyone else.
 
 Entitlements that commonly block a first local build:
 
-- `com.apple.security.application-groups` = `group.alvr.client.ALVR`, in **both**
+- `com.apple.security.application-groups` = `group.dev.alphastream.client`, in **both**
   [ALVRClient/ALVRClient.entitlements](ALVRClient/ALVRClient.entitlements) and
-  `ALVREyeBroadcast/ALVREyeBroadcast.entitlements`. App groups require a **paid** Apple Developer
-  membership and the id must be unique to your team — rename it to
-  `group.com.<you>.alvr.client.ALVR` in both files, keeping them identical.
+  `ALVREyeBroadcast/ALVREyeBroadcast.entitlements`. App groups require a **paid** membership and a
+  globally unique id; if you rename it, keep both files identical.
 - `com.apple.developer.low-latency-streaming` — if provisioning refuses it, delete the key. It is a
   networking QoS hint; streaming works without it.
 - On a **free** account, app groups are unavailable at all. Then remove the app group from both
@@ -329,7 +347,7 @@ context that is not in the diffs:
   up reliably; raise the dashboard setting to Info if you want `alvr_log` in `session_log.txt`.
 - **Reading logs off the headset**: `log stream` has no device option and `devicectl` cannot attach
   to a running process, so the only route is
-  `xcrun devicectl device process launch --console com.<you>.alvr.client`, which relaunches the app.
+  `xcrun devicectl device process launch --console dev.alphastream.client`, which relaunches the app.
 - The pairing and decoder-identity diagnostics that produced the numbers in §7 are still in the
   code, switched on by the streamer's **Settings → Extra → Logging → client log report level**
   being `Info` or `Debug` (`Settings.verboseDiagnostics`). That is deliberately the same value
