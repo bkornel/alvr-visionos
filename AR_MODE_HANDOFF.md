@@ -331,6 +331,15 @@ context that is not in the diffs:
   to a running process, so the only route is
   `xcrun devicectl device process launch --console com.<you>.alvr.client`, which relaunches the app.
 - The pairing and decoder-identity diagnostics that produced the numbers in §7 are still in the
-  code, gated off by `EventHandler.alphaPairingDiagnosticsEnabled` and
-  `VideoHandler.decoderPtsDiagnosticsEnabled`. Flip either to `true` to re-measure; they cost
-  nothing while false.
+  code, switched on by the streamer's **Settings → Extra → Logging → client log report level**
+  being `Info` or `Debug` (`Settings.verboseDiagnostics`). That is deliberately the same value
+  that decides whether `alvr_log` survives the core's filter, so diagnostics cannot be "on" yet
+  invisible.
+
+  **The level is only picked up at stream start**, so change it in the dashboard and then
+  reconnect. `alvr_get_settings_json` is written once per `StreamingStarted`
+  (`client_core/src/c_api.rs`), and although `client_log_report_level` is flagged `real-time` in
+  the schema it is not part of `RealTimeConfig`, whose payload the C API discards into an empty
+  `AlvrEvent::RealTimeConfig {}` anyway. Making it live would mean adding the field to
+  `RealTimeConfig::from_settings`, carrying the payload through the C API and refreshing
+  `SETTINGS` — judged not worth the permanent protocol surface for a debugging toggle.

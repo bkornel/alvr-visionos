@@ -54,9 +54,34 @@ struct SettingsCodables {
         @OptionSwitch var controllers: ControllersConfig?
     }
 
+    //
+    // Extra
+    //
+
+    // Mirrors alvr_common::LogSeverity. Serde writes the unit variants as plain strings.
+    enum LogSeverity: String, Codable {
+        case Debug
+        case Info
+        case Warning
+        case Error
+    }
+
+    struct LoggingConfig: Codable {
+        // Switch<LogSeverity>: "Disabled", or {"Enabled": "Info"}. nil means the streamer is not
+        // collecting client logs at all.
+        @OptionSwitch var client_log_report_level: LogSeverity?
+    }
+
+    struct ExtraConfig: Codable {
+        let logging: LoggingConfig?
+    }
+
     struct Settings: Codable {
         let video: VideoConfig
         let headset: HeadsetConfig
+        // Optional so that a streamer which omits or renames the block cannot fail the whole
+        // settings decode and take the alpha configuration down with it.
+        let extra: ExtraConfig?
     }
 }
 
@@ -102,5 +127,28 @@ struct Settings {
     
     public static func clearSettingsCache() {
         Settings._cached = nil
+        Settings._cachedVerboseDiagnostics = nil
+    }
+
+    static var _cachedVerboseDiagnostics: Bool?
+
+    // Whether to emit the alpha-pairing and decoder-identity diagnostics, driven by the streamer's
+    // Settings -> Extra -> Logging -> client log report level. Info or Debug turns them on.
+    //
+    // Deliberately not a separate client-side toggle: this same value also decides whether
+    // alvr_log output survives the filter in the client core's logging backend, so a client-only
+    // switch would produce diagnostics that are "on" yet still invisible. One setting, one
+    // behaviour. Read per frame, so the result is cached until the settings cache is cleared.
+    //
+    // Settings only exist after the stream config arrives, so anything logged before connection
+    // sees false and should use print() if it needs to be seen.
+    public static var verboseDiagnostics: Bool {
+        if let cached = Settings._cachedVerboseDiagnostics {
+            return cached
+        }
+        let level = getAlvrSettings()?.extra?.logging?.client_log_report_level
+        let enabled = (level == .Info || level == .Debug)
+        Settings._cachedVerboseDiagnostics = enabled
+        return enabled
     }
 }

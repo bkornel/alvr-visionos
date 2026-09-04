@@ -147,9 +147,6 @@ class EventHandler: ObservableObject {
     var lastAlphaImageBuffer: CVImageBuffer? = nil
     var lastAlphaTargetTimestamp: UInt64 = 0
 
-    // Off by default: this runs once per rendered frame. Flip to true to re-measure pairing.
-    static let alphaPairingDiagnosticsEnabled = false
-
     // Diagnostics for alpha/color pairing. The renderer pairs loosely by design, so a stale alpha
     // is substituted silently; these count how often that happens and by how much.
     var lastAlphaTimestamp: UInt64 = 0
@@ -604,7 +601,8 @@ class EventHandler: ObservableObject {
 
     // Called with the queue lock held. Reports once a second rather than per frame.
     private func recordAlphaPairing(targetTimestamp: UInt64) {
-        guard EventHandler.alphaPairingDiagnosticsEnabled else { return }
+        // Driven by the streamer's client log report level (Settings -> Extra -> Logging).
+        guard Settings.verboseDiagnostics else { return }
 
         guard lastAlphaTimestamp != 0 else {
             alphaPairStarved += 1

@@ -647,10 +647,6 @@ struct VideoHandler {
     
     // MARK: - Decoder timestamp identity
 
-    // Off by default: this runs per decoded frame on both streams. Flip to true to re-measure
-    // decoder frame identity; with it false the guard below is constant-folded away.
-    static let decoderPtsDiagnosticsEnabled = false
-
     private static let ptsStatsLock = NSLock()
     private static var ptsMatched: [String: Int] = [:]
     private static var ptsMismatched: [String: Int] = [:]
@@ -669,7 +665,8 @@ struct VideoHandler {
     }
 
     private static func recordDecoderPts(stream: String, fed: UInt64, decoded: UInt64) {
-        guard decoderPtsDiagnosticsEnabled else { return }
+        // Driven by the streamer's client log report level (Settings -> Extra -> Logging).
+        guard Settings.verboseDiagnostics else { return }
 
         ptsStatsLock.lock()
         defer { ptsStatsLock.unlock() }
